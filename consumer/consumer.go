@@ -56,6 +56,7 @@ func (r *RabbitMQListener) RunListener() {
 	fmt.Println("    R A B I T M Q   L I S T E N E R    ")
 	fmt.Println("=======================================")
 
+	// EXAMPLE DIRECT WITH DLX
 	listener, err := r.client.NewListener(&rabbitmq.ListenerOpts{
 		Consumer: "test-ade",
 		Queue: rabbitmq.QueueOpts{
@@ -115,6 +116,97 @@ func (r *RabbitMQListener) RunListener() {
 	go dlxListener.Listen(context.Background(), func(ctx context.Context, d *amqp091.Delivery) error {
 		fmt.Printf("[DLX] Received dead letter message: %s\n", string(d.Body))
 		// Acknowledge it or send to another queue
+		return nil
+	})
+
+	// EXAMPLE FANOUT
+	fanoutListener, err := r.client.NewListener(&rabbitmq.ListenerOpts{
+		Consumer: "fanout-consumer",
+		Queue: rabbitmq.QueueOpts{
+			Declare: &rabbitmq.QueueDeclareOpts{
+				AutoDelete: true,
+			},
+			Bind: &rabbitmq.QueueBindOpts{
+				Exchange: "fanout-exchange",
+				// Fanout tidak butuh Key
+			},
+			Name: "fanout-queue",
+		},
+		Exchange: &rabbitmq.ExchangeDeclareOpts{
+			Name:       "fanout-exchange",
+			Kind:       rabbitmq.KindFanout,
+			AutoDelete: true,
+		},
+	})
+
+	if err != nil {
+		log.Err(err).Msg("failed to create Fanout listener")
+	}
+
+	go fanoutListener.Listen(context.Background(), func(ctx context.Context, d *amqp091.Delivery) error {
+		fmt.Printf("[Fanout] Received message: %s\n", string(d.Body))
+		return nil
+	})
+
+	// EXAMPLE TOPIC
+	topicListener, err := r.client.NewListener(&rabbitmq.ListenerOpts{
+		Consumer: "topic-consumer",
+		Queue: rabbitmq.QueueOpts{
+			Declare: &rabbitmq.QueueDeclareOpts{
+				AutoDelete: true,
+			},
+			Bind: &rabbitmq.QueueBindOpts{
+				Exchange: "topic-exchange",
+				Key:      "order.*", // contoh routing key pattern
+			},
+			Name: "topic-queue",
+		},
+		Exchange: &rabbitmq.ExchangeDeclareOpts{
+			Name:       "topic-exchange",
+			Kind:       rabbitmq.KindTopic,
+			AutoDelete: true,
+		},
+	})
+
+	if err != nil {
+		log.Err(err).Msg("failed to create Topic listener")
+	}
+
+	go topicListener.Listen(context.Background(), func(ctx context.Context, d *amqp091.Delivery) error {
+		fmt.Printf("[Topic] Received message with routing key [%s]: %s\n", d.RoutingKey, string(d.Body))
+		return nil
+	})
+
+	// EXAMPLE HEADER
+	headersListener, err := r.client.NewListener(&rabbitmq.ListenerOpts{
+		Consumer: "headers-consumer",
+		Queue: rabbitmq.QueueOpts{
+			Declare: &rabbitmq.QueueDeclareOpts{
+				AutoDelete: true,
+			},
+			Bind: &rabbitmq.QueueBindOpts{
+				Exchange: "headers-exchange",
+				Args: amqp091.Table{
+					"x-match": "all", // "all" = AND, "any" = OR
+					"type":    "report",
+					"format":  "pdf",
+				},
+			},
+			Name: "headers-queue",
+		},
+		Exchange: &rabbitmq.ExchangeDeclareOpts{
+			Name:       "headers-exchange",
+			Kind:       rabbitmq.KindHeaders,
+			AutoDelete: true,
+		},
+	})
+
+	if err != nil {
+		log.Err(err).Msg("failed to create Headers listener")
+	}
+
+	go headersListener.Listen(context.Background(), func(ctx context.Context, d *amqp091.Delivery) error {
+		fmt.Printf("[Headers] Received message: %s\n", string(d.Body))
 		return nil
 	})
 }
