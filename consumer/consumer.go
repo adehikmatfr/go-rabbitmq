@@ -25,8 +25,9 @@ type RabbitMQListenerOptions struct {
 }
 
 type RabbitMQListener struct {
-	client  *rabbitmq.Client
-	errChan chan error
+	client    *rabbitmq.Client
+	errChan   chan error
+	listeners []*rabbitmq.Listener
 }
 
 func NewRabbitMQListener(opts *RabbitMQListenerOptions) RabbitMQListenerService {
@@ -94,6 +95,8 @@ func (r *RabbitMQListener) RunListener() {
 		return fmt.Errorf("ini biar masuk ke dlx")
 	})
 
+	r.listeners = append(r.listeners, listener)
+
 	dlxListener, err := r.client.NewListener(&rabbitmq.ListenerOpts{
 		Consumer: "test-ade-dlx-consumer",
 		Queue: rabbitmq.QueueOpts{
@@ -122,6 +125,8 @@ func (r *RabbitMQListener) RunListener() {
 		// Acknowledge it or send to another queue
 		return nil
 	})
+
+	r.listeners = append(r.listeners, dlxListener)
 
 	// EXAMPLE FANOUT
 	fanoutListener, err := r.client.NewListener(&rabbitmq.ListenerOpts{
@@ -152,6 +157,8 @@ func (r *RabbitMQListener) RunListener() {
 		return nil
 	})
 
+	r.listeners = append(r.listeners, fanoutListener)
+
 	// EXAMPLE TOPIC
 	topicListener, err := r.client.NewListener(&rabbitmq.ListenerOpts{
 		Consumer: "topic-consumer",
@@ -180,6 +187,8 @@ func (r *RabbitMQListener) RunListener() {
 		fmt.Printf("[Topic] Received message with routing key [%s]: %s\n", d.RoutingKey, string(d.Body))
 		return nil
 	})
+
+	r.listeners = append(r.listeners, topicListener)
 
 	// EXAMPLE HEADER
 	headersListener, err := r.client.NewListener(&rabbitmq.ListenerOpts{
@@ -213,8 +222,18 @@ func (r *RabbitMQListener) RunListener() {
 		fmt.Printf("[Headers] Received message: %s\n", string(d.Body))
 		return nil
 	})
+
+	r.listeners = append(r.listeners, headersListener)
 }
 
 func (r *RabbitMQListener) Shutdown(ctx context.Context) error {
+	if len(r.listeners) > 0 {
+		for _, l := range r.listeners {
+			err := l.Close()
+			if err != nil {
+				log.Err(err).Msg("failed to close listener")
+			}
+		}
+	}
 	return r.client.Close()
 }

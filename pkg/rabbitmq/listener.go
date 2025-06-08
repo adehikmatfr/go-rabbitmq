@@ -163,7 +163,11 @@ func (l *Listener) Listen(ctx context.Context, handler func(context.Context, *am
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case msg := <-msgs:
+		case msg, ok := <-msgs:
+			if !ok {
+				log.Info().Msg("Message channel closed, exiting listener.")
+				return nil
+			}
 			if err := handler(ctx, &msg); err != nil {
 				log.Err(err).Msgf("Handle message for consumer %s", l.consumer)
 				msg.Nack(false, true) // requeue
