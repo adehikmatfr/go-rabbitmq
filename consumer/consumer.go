@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog/log"
@@ -59,13 +60,15 @@ func (r *RabbitMQListener) RunListener() {
 	// EXAMPLE DIRECT WITH DLX
 	listener, err := r.client.NewListener(&rabbitmq.ListenerOpts{
 		Consumer: "test-ade",
+		Prefetch: 1,
 		Queue: rabbitmq.QueueOpts{
+			AutoAck: false,
 			Declare: &rabbitmq.QueueDeclareOpts{
 				AutoDelete: true,
 				Args: amqp091.Table{
 					"x-dead-letter-exchange":    "test-ade-dlx-exchange", // nama DLX
 					"x-dead-letter-routing-key": "test-ade-dlx-key",      // opsional
-					"x-message-ttl":             int32(50000),            // TTL 10 detik (opsional)
+					"x-message-ttl":             int32(10000),
 				},
 			},
 			Bind: &rabbitmq.QueueBindOpts{
@@ -87,7 +90,8 @@ func (r *RabbitMQListener) RunListener() {
 
 	go listener.Listen(context.Background(), func(ctx context.Context, d *amqp091.Delivery) error {
 		fmt.Println(string(d.Body))
-		return fmt.Errorf("error")
+		time.Sleep(10 * time.Second)
+		return fmt.Errorf("ini biar masuk ke dlx")
 	})
 
 	dlxListener, err := r.client.NewListener(&rabbitmq.ListenerOpts{

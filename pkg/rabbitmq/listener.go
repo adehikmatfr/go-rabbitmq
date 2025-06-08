@@ -63,6 +63,7 @@ type ListenerOpts struct {
 	Queue    QueueOpts
 	Exchange *ExchangeDeclareOpts
 	Consumer string
+	Prefetch int
 }
 
 func (c *Client) NewListener(opts *ListenerOpts) (*Listener, error) {
@@ -70,6 +71,11 @@ func (c *Client) NewListener(opts *ListenerOpts) (*Listener, error) {
 	if err != nil {
 		log.Err(err).Msgf("Open Channel for consumer %s", opts.Consumer)
 		return nil, err
+	}
+
+	// safe mode queue
+	if opts.Prefetch > 0 {
+		ch.Qos(opts.Prefetch, 0, false) // await queue before ack
 	}
 
 	// declare queue
