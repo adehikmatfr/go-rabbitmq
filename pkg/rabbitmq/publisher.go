@@ -7,6 +7,18 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var dialChannel = func(conn *amqp.Connection) (*amqp.Channel, error) {
+	return conn.Channel()
+}
+
+var publishWithContext = func(ch *amqp.Channel, ctx context.Context, exchange, key string, mandatory, immediate bool, pub amqp.Publishing) error {
+	return ch.PublishWithContext(ctx, exchange, key, mandatory, immediate, pub)
+}
+
+var closeChannel = func(ch *amqp.Channel) error {
+	return ch.Close()
+}
+
 type PublisherOpts struct {
 	Exchange    string
 	Mandatory   bool
@@ -29,7 +41,7 @@ type Publisher struct {
 }
 
 func (c *Client) NewPublisher(opts PublisherOpts) (*Publisher, error) {
-	ch, err := c.conn.Channel()
+	ch, err := dialChannel(c.conn)
 	if err != nil {
 		log.Err(err).Msgf("Open channel for publisher to exchange %s", opts.Exchange)
 		return nil, err
@@ -48,7 +60,8 @@ func (c *Client) NewPublisher(opts PublisherOpts) (*Publisher, error) {
 }
 
 func (p *Publisher) Publish(ctx context.Context, routingKey string, body []byte) error {
-	err := p.channel.PublishWithContext(
+	err := publishWithContext(
+		p.channel,
 		ctx,
 		p.exchange,
 		routingKey,
@@ -62,6 +75,7 @@ func (p *Publisher) Publish(ctx context.Context, routingKey string, body []byte)
 			Expiration:  p.expiration,
 		},
 	)
+
 	if err != nil {
 		log.Err(err).Msgf("Publish to exchange %s with routingKey %s", p.exchange, routingKey)
 		return err
@@ -72,7 +86,7 @@ func (p *Publisher) Publish(ctx context.Context, routingKey string, body []byte)
 }
 
 func (p *Publisher) Close() error {
-	if err := p.channel.Close(); err != nil {
+	if err := closeChannel(p.channel); err != nil {
 		log.Err(err).Msgf("Close publisher channel for exchange %s", p.exchange)
 		return err
 	}

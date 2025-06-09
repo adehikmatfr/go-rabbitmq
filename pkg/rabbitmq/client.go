@@ -7,6 +7,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var amqpDial = amqp.Dial
+
 type Kind string
 
 const (
@@ -25,11 +27,15 @@ func NewClient(url string) (*Client, error) {
 	var err error
 
 	for i := range 5 {
-		conn, err = amqp.Dial(url)
+		conn, err = amqpDial(url)
 		if err == nil {
 			break
+		} else {
+			if i == 4 {
+				log.Info().Msg("Failed to connect RabbitMQ, retry attempt 5")
+				return nil, err
+			}
 		}
-		// Retry dengan exponential backoff
 		wait := time.Duration(i+1) * time.Second
 		log.Info().Msgf("Try to connect RabbitMQ, retry attempt %v...\n", wait)
 		time.Sleep(wait)
